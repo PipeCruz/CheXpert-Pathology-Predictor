@@ -60,15 +60,20 @@ def evaluate(model, criterion, eval_loader, device):
     print('Evaluating')
     model.eval()
     eval_loss = 0
+    # write to csv
+    # make file
+    # write_file = open("eval.csv", "w")
+    
     with torch.no_grad():
-        for images, labels in eval_loader:
-            images = images.to(device)
-            labels = labels.to(device)
-            output = model(images)
-            
-            loss = criterion(output, labels)
-            
-            eval_loss += loss.item()
+            for images, labels in eval_loader:
+                images = images.to(device)
+                labels = labels.to(device)
+                output = model(images)
+                
+                loss = criterion(output, labels)
+                
+                eval_loss += loss.item()
+                
             
     eval_loss /= len(eval_loader.dataset)
     average_loss = eval_loss
@@ -76,8 +81,42 @@ def evaluate(model, criterion, eval_loader, device):
     
     return model
     
+    
+def test(model, criterion, test_loader, device):
+    print('Testing')
+    model.eval()
+    test_loss = 0
+    # write to csv
+    # make file
+    write_file = open("submission.csv", "w")
+    # first line is
+    write_file.write("Id,No Finding,Enlarged Cardiomediastinum,Cardiomegaly,Lung Opacity,Lung Lesion,Edema,Consolidation,Pneumonia,Atelectasis,Pneumothorax,Pleural Effusion,Pleural Other,Fracture,Support Devices\n")
+    
+    
+    # write to csv now
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images = images.to(device)
+            labels = labels.to(device)
+            output = model(images)
+            
+            loss = criterion(output, labels)
+            
+            test_loss += loss.item()
+            
+            # write to csv
+            for i in range(len(output)):
+                write_file.write(f"{i},{','.join([str(x) for x in output[i].tolist()])}\n")
+                
+    test_loss /= len(test_loader.dataset)
+    average_loss = test_loss
+    print('Test set: Average loss: {:.4f}'.format(average_loss))
+    
+    return model
+    
+    
 def main(local=False, num_patient=100):
-    custom_dataset = read_data.CustomDataset(csv_file = "cs156b/train2023.csv", root_dir = ROOT_DIR)
+    custom_dataset = CustomDataset(csv_file = "cs156b/train2023.csv", root_dir = ROOT_DIR, train=True)
        
     
     # when we only have a subset of the data we need the indices that
@@ -94,9 +133,10 @@ def main(local=False, num_patient=100):
         subset = torch.utils.data.Subset(custom_dataset, idxs)
         custom_dataset = subset
     else:
-        test_set = read_data.CustomDataset(csv_file = "cs156b/valid2023.csv", root_dir = ROOT_DIR)
+        test_set = CustomDataset(csv_file = "cs156b/test.csv", root_dir = ROOT_DIR, train=False)
         test_loader = DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
     # print(len(subset))
+        print(len(custom_dataset))
     
     
     # load model if it exists
@@ -135,6 +175,8 @@ def main(local=False, num_patient=100):
     # Train the model
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     
+    print("Device: ", device)
+    
     model = train(model, criterion, optimizer, tune_loader, device)
     
     # evaluate the model
@@ -142,8 +184,7 @@ def main(local=False, num_patient=100):
     
     # if remote, evaluate on the test set
     if not local:
-        
-        model = eval(model, criterion, test_loader, device)
+        model = test(model, criterion, test_loader, device)
     
     
     # could do like kfolds here
@@ -173,4 +214,4 @@ def main(local=False, num_patient=100):
 
 
 if __name__ == '__main__':
-    main(local=True)
+    main(local=False)
