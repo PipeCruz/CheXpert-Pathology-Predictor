@@ -11,6 +11,10 @@ import numpy as np
 # from skimage import io
 import cv2
 
+CLASS_LABELS = ['No Finding', 'Enlarged Cardiomediastinum', 
+            'Cardiomegaly', 'Lung Opacity', 'Pneumonia', 
+            'Pleural Effusion', 'Pleural Other', 'Fracture', 
+            'Support Devices']
 
 class CustomDataset(Dataset):
     
@@ -29,19 +33,17 @@ class CustomDataset(Dataset):
             transform (callable, optional): Optional transform to be applied on a sample.
         """
         
-        self.labels = ['No Finding', 'Enlarged Cardiomediastinum', 
-            'Cardiomegaly', 'Lung Opacity', 'Pneumonia', 
-            'Pleural Effusion', 'Pleural Other', 'Fracture', 
-            'Support Devices']
+        self.labels = CLASS_LABELS
         
-        self.df = pd.read_csv(csv_file)
+        self.df = pd.read_csv(os.path.join(root_dir, csv_file))
+        self.df = self.df.iloc[:-1]
+        
+	    # FIXME just for training
         # fil in NaN values with 0
         self.train = train
         if train:
             self.df[self.labels] = self.df[self.labels].fillna(0)
         
-        # self.root_dir = root_dir
-        # self.root_dir = "/groups/CS156b/data"
         self.root_dir = root_dir
         self.transform = transform
 
@@ -55,16 +57,10 @@ class CustomDataset(Dataset):
         row = self.df.iloc[idx]
 
         path = row['Path']
-        # remove this for HPC
-        # if self.train:
-        #     path = path[6:]
-        # else:
-        #     path = path[5:]
-            
-            
+        # on local this is a bit different      
         
         try:
-            print("attempting to read")
+            # print("attempting to read")
             image = cv2.imread(os.path.join(self.root_dir, path))
 
             # if self.transform:
@@ -82,11 +78,11 @@ class CustomDataset(Dataset):
             
             image = torch.tensor(resized_img, dtype=torch.float32) 
             # print("image shape: ", image.shape)
-            print("read image")
+            # print("read image")
         except Exception as e:
             print("Failed to read image:", e)
-            return None, None
-
+            return torch.zeros(3, 224, 224), torch.zeros(9), idx
+        
         if self.train:
             # Convert labels to numpy array
             labels = row[self.labels].values
@@ -96,7 +92,7 @@ class CustomDataset(Dataset):
             # Convert numpy array to tensor, specifying the dtype as torch.float32
             labels = torch.tensor(labels, dtype=torch.float32)
             
-            return image, labels
+            return image, labels, idx
         else:
             # labels will be empty tensor of 9
-            return image, torch.tensor([0]*9 , dtype=torch.float32)
+            return image, torch.tensor([0]*9 , dtype=torch.float32), idx
