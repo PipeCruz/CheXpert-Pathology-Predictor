@@ -37,5 +37,6 @@
 #SBATCH --mail-type=END
 #SBATCH --mail-type=FAIL
 
+### FIXME the file name should be changed each time
 cd /home/fcruzfal/cs156b/
-/home/fcruzfal/anaconda3/bin/python3 modeldense.py --file_name sub_%j.csv
+/home/fcruzfal/anaconda3/bin/python3 modeldense.py --file_name submission.csv

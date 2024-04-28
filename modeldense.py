@@ -181,6 +181,8 @@ def main(local=False, file_name="submission.csv", num_patient=100):
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     # model = torch.nn.DataParallel(model).cuda()
     
+    model = model.to(device)
+    
     # FIXME figure out how to do this all with ddp
     # ddp_model = torch.nn.DistributedDataParallel(model, device_ids=[0, 1, 2, 3])
     
