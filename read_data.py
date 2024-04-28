@@ -1,7 +1,3 @@
-"""
-change for each preprocessing maybe
-"""
-
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
@@ -21,25 +17,22 @@ class CustomDataset(Dataset):
 
     """My custom chexpert dataset"""
     
-    def __init__(self, csv_file, root_dir, transform=None, train=True):
+    def __init__(self, csv_file, root_dir= '/groups/CS156b/data', transform=None, train=True):
         
         """
         Args:
             csv_file (string): Path to the CSV file with annotations.
-                train2023.csv or valid2023.csv?
             root_dir (string): Directory with all the images.
-                on HPC we want this to be to /groups/CS156b/data
-                where we have images in data/train and data/test
             transform (callable, optional): Optional transform to be applied on a sample.
         """
         
         self.labels = CLASS_LABELS
-        
         self.df = pd.read_csv(os.path.join(root_dir, csv_file))
+        
+        # Currenty Excluding the last row since it will crash
         self.df = self.df.iloc[:-1]
         
-	    # FIXME just for training
-        # fil in NaN values with 0
+	    # FIXME future generate NaN values for empty labels
         self.train = train
         if train:
             self.df[self.labels] = self.df[self.labels].fillna(0)
@@ -57,32 +50,29 @@ class CustomDataset(Dataset):
         row = self.df.iloc[idx]
 
         path = row['Path']
-        # on local this is a bit different      
         
         try:
-            # print("attempting to read")
+            # TODO change this to torchvision.transforms stuff
+            # hopefully we wont even need a single opencv call
+
             image = cv2.imread(os.path.join(self.root_dir, path))
-
-            # if self.transform:
-            #     image = self.transform(image)
-
-            # image = np.repeat(image[..., np.newaxis], 3, -1)
-            
-            # image = torch.tensor(image, dtype=torch.float32)  # add transpose to rearrange dimensions
             resized_img = cv2.resize(image, (224, 224))
             
-            # normalize image
             resized_img = cv2.normalize(resized_img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
             
+            # we want (C, H, W) not (H, W, C)
             resized_img = resized_img.transpose(2, 0, 1)
             
-            image = torch.tensor(resized_img, dtype=torch.float32) 
-            # print("image shape: ", image.shape)
-            # print("read image")
+            image = torch.tensor(resized_img, dtype=torch.float32)
+            
+            # basically going to want to change this whole try to an
+            # if transform is not None: ... (else: ... ?)
+             
         except Exception as e:
             print("Failed to read image:", e)
-            return torch.zeros(3, 224, 224), torch.zeros(9), idx
+            return torch.zeros(3, 224, 224), torch.zeros(9), None
         
+        # for training we want the labels
         if self.train:
             # Convert labels to numpy array
             labels = row[self.labels].values
@@ -92,7 +82,8 @@ class CustomDataset(Dataset):
             # Convert numpy array to tensor, specifying the dtype as torch.float32
             labels = torch.tensor(labels, dtype=torch.float32)
             
-            return image, labels, idx
+            return image, labels, None
         else:
-            # labels will be empty tensor of 9
-            return image, torch.tensor([0]*9 , dtype=torch.float32), idx
+            # if we're testing there are no labels...
+            pid = row['Id']
+            return image, torch.tensor([0]*9 , dtype=torch.float32), pid

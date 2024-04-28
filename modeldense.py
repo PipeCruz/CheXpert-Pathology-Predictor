@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torchvision
 import torch.backends.cudnn as cudnn
-from torch.optim import Adam, SGD
+from torch.optim import SGD
 
 import torchvision.transforms as transforms
 import numpy as np
@@ -14,9 +14,7 @@ from read_data import CustomDataset
 from torch.utils.data import DataLoader
 
 from sklearn.metrics import mean_squared_error as mse
-from transformers import get_scheduler
 # transformers==4.33.0
-from tqdm.auto import tqdm
 
 from sklearn.model_selection import train_test_split
 from torchvision.models import densenet169
@@ -26,24 +24,32 @@ import read_data
 CKPT_PATH = 'fixme.pth'
 
 N_CLASSES = 9
-CLASS_NAMES = ['No Finding', 'Enlarged Cardiomediastinum', 
+
+# Id	No Finding	Enlarged Cardiomediastinum	Cardiomegaly	Lung Opacity	Pneumonia	Pleural Effusion	Pleural Other	Fracture	Support Devices
+OUTPUT_CLASSES = ['Id', 'No Finding', 'Enlarged Cardiomediastinum', 
             'Cardiomegaly', 'Lung Opacity', 'Pneumonia', 
             'Pleural Effusion', 'Pleural Other', 'Fracture', 
             'Support Devices']
 
-ROOT_DIR = '/groups/CS156b/data'
-BATCH_SIZE = 64
 
-# maybe move these to some file called like modeldense.py
+ROOT_DIR = '/groups/CS156b/data'
+TRAIN_CSV = 'student_labels/train2023.csv'
+TEST_CSV = 'student_labels/test_ids.csv'
+
+BATCH_SIZE = 64
+N_EPOCHS = 10
+
 def train(model, criterion, optimizer, train_loader, device):
     print("Training")
     model.train()
     
-    for epoch in range(10):
-        print(f"epoch: {epoch+1}/10", flush=True)
-        for batch_idx, (images, labels, idxs) in enumerate(train_loader):            
+    for epoch in range(N_EPOCHS):
+        print(f"epoch: {epoch+1}/{N_EPOCHS}", flush=True)
+        # purpose of batch_idx is for plotting pls someone else do it ☹
+        for batch_idx, (images, labels, _) in enumerate(train_loader):            
             optimizer.zero_grad()
             
+            # send tensors over to cudaland            
             images = images.to(device)
             labels = labels.to(device)
             
@@ -56,7 +62,8 @@ def train(model, criterion, optimizer, train_loader, device):
         
     return model
 
-# change to test_loss later
+# FIXME probably I haven't touched this since the Cambrian times (last week)
+# perhaps in conjunction with kfold 🤔
 def evaluate(model, criterion, eval_loader, device):
     print('Evaluating')
     model.eval()
@@ -75,27 +82,24 @@ def evaluate(model, criterion, eval_loader, device):
             
     eval_loss /= len(eval_loader.dataset)
     average_loss = eval_loss
-    print('Eval set: Average loss: {:.4f}'.format(average_loss))
+    # print('Eval set: Average loss: {:.4f}'.format(average_loss))
     
     return model
     
-    
-def test(model, criterion, test_loader, device, name_of_output="submission.csv"):
+CHUNK_SIZE = 1024 # power of 2 is probably better
+
+def test(model, criterion, test_loader, device, name_of_output):
     print('Testing')
     model.eval()
     test_loss = 0
     
     write_file = open(name_of_output, "w")
-    # first line is
-    # fixme to use CLASSS_NAMES or CLASS_LABELS from read_data.py
-    write_file.write("Id, No Finding,Enlarged Cardiomediastinum,Cardiomegaly,Lung Opacity,Pneumonia,Pleural Effusion,Pleural Other,Fracture,Support Devices\n")
+    # Header
+    write_file.write(','.join(OUTPUT_CLASSES) + '\n')
     
-    # write_file.write("Id,No Finding,Enlarged Cardiomediastinum,Cardiomegaly,Lung Opacity,Lung Lesion,Edema,Consolidation,Pneumonia,Atelectasis,Pneumothorax,Pleural Effusion,Pleural Other,Fracture,Support Devices\n")
-    
-    # write to csv now
-    batch = 0
     with torch.no_grad():
-        for images, labels, idxs in test_loader:
+        lines = []
+        for images, labels, pids in test_loader:
                       
             images = images.to(device)
             labels = labels.to(device)
@@ -105,22 +109,27 @@ def test(model, criterion, test_loader, device, name_of_output="submission.csv")
             
             test_loss += loss.item()
             
-            # each idx is an ID
-            for idx, out in zip(idxs, output):
-                write_file.write(f"{idx},{','.join([str(x) for x in out.tolist()])}\n")
+            for pid, out in zip(pids, output):
+                lines.append(f"{pid},{','.join([str(x) for x in out.tolist()])}\n")
+                
+            if len(lines) >= CHUNK_SIZE:
+                write_file.writelines(lines)
+                lines = []
+                
+        if len(lines) > 0:
+            write_file.writelines(lines)
                 
     test_loss /= len(test_loader.dataset)
-    average_loss = test_loss
-    print('Test set: Average loss: {:.4f}'.format(average_loss), flush=True)
+    print('Test set: Average loss: {:.4f}'.format(test_loss), flush=True)
     
     return model
     
-TRAIN_CSV = 'student_labels/train2023.csv'
-TEST_CSV = 'student_labels/test_ids.csv'
+
 
 def main(local=False, file_name="submission.csv", num_patient=100):
     custom_dataset = CustomDataset(csv_file = TRAIN_CSV, root_dir = ROOT_DIR, train=True)
        
+    # num_workers needs to be figured out
     
     # when we only have a subset of the data we need the indices that
     if (local):
@@ -137,21 +146,19 @@ def main(local=False, file_name="submission.csv", num_patient=100):
         custom_dataset = subset
     else:
         test_set = CustomDataset(csv_file = TEST_CSV, root_dir = ROOT_DIR, train=False)
-        test_loader = DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
+        test_loader = DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=1)
     # print(len(subset))
         # print(len(custom_dataset))
     
-    
+    model = densenet169(weights=DenseNet169_Weights.DEFAULT)
     # load model if it exists
     if os.path.exists(CKPT_PATH):
-        model = densenet169(weights=DenseNet169_Weights.DEFAULT)
         model.classifier = nn.Linear(model.classifier.in_features, N_CLASSES)
         model.load_state_dict(torch.load(CKPT_PATH))
     else:
-        model = densenet169(weights=DenseNet169_Weights.DEFAULT)
     
         for param in model.parameters():
-            param.requires_grad = True
+            param.requires_grad = False
         
         submodules = model.features[-2:]
         for param in submodules.parameters():
@@ -159,33 +166,35 @@ def main(local=False, file_name="submission.csv", num_patient=100):
         
         model.classifier = nn.Linear(model.classifier.in_features, N_CLASSES)
     
-    
-    # train_size = int(0.95 * len(custom_dataset))
-    # eval_size = len(custom_dataset) - train_size
-    
-
-    # tune_set, eval_set = torch.utils.data.random_split(custom_dataset, [train_size, eval_size])
-    
-    train_loader = DataLoader(custom_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
+        
+    train_loader = DataLoader(custom_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=1)
     # eval_loader = DataLoader(eval_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=1)
     
     # parallelize the model
-    model = torch.nn.DataParallel(model).cuda()
+    
 
     criterion = nn.MSELoss()
 #    optimizer = Adam(model.parameters(), lr=1e-5)
+    # using SGD right now because my sample size of 1 says its faster
     optimizer = SGD(model.parameters(), lr=1e-4, momentum=0.9)
     # Train the model
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    # model = torch.nn.DataParallel(model).cuda()
+    
+    # FIXME figure out how to do this all with ddp
+    # ddp_model = torch.nn.DistributedDataParallel(model, device_ids=[0, 1, 2, 3])
+    
     
     print("Device: ", device)
     
+    # idk how to feel about this model equaling thing i should probably change it
+        # but i thinkt it's fine for now
     model = train(model, criterion, optimizer, train_loader, device)
     
    
     # if remote, test the model
     if not local:
-        model = test(model, criterion, test_loader, device)
+        model = test(model, criterion, test_loader, device, name_of_output=file_name)
     
     torch.save(model.state_dict(), CKPT_PATH)
     
