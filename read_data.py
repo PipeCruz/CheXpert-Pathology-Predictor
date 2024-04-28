@@ -70,7 +70,7 @@ class CustomDataset(Dataset):
              
         except Exception as e:
             print("Failed to read image:", e)
-            return torch.zeros(3, 224, 224), torch.zeros(9), None
+            return torch.zeros(3, 224, 224), torch.zeros(9), -1
         
         # for training we want the labels
         if self.train:
@@ -82,7 +82,7 @@ class CustomDataset(Dataset):
             # Convert numpy array to tensor, specifying the dtype as torch.float32
             labels = torch.tensor(labels, dtype=torch.float32)
             
-            return image, labels, None
+            return image, labels, -1
         else:
             # if we're testing there are no labels...
             pid = row['Id']
