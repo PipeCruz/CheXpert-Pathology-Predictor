@@ -21,6 +21,9 @@ from torchvision.models import densenet169
 from torchvision.models.densenet import DenseNet169_Weights
 import read_data
 
+import matplotlib as plt
+import matplotx as pltx
+
 CKPT_PATH = 'fixme.pth'
 
 N_CLASSES = 9
@@ -39,12 +42,17 @@ TEST_CSV = 'student_labels/test_ids.csv'
 BATCH_SIZE = 64
 N_EPOCHS = 10
 
-def train(model, criterion, optimizer, train_loader, device):
+def train(model, criterion, optimizer, train_loader, test_loader, device):
     print("Training")
-    model.train()
+    # model.train()
+    train_losses = []
+    test_losses = []
     
     for epoch in range(N_EPOCHS):
+        model.train()
+        train_loss = 0.0
         print(f"epoch: {epoch+1}/{N_EPOCHS}", flush=True)
+
         # purpose of batch_idx is for plotting pls someone else do it ☹
         for batch_idx, (images, labels, _) in enumerate(train_loader):            
             optimizer.zero_grad()
@@ -56,11 +64,30 @@ def train(model, criterion, optimizer, train_loader, device):
             output = model(images)
             
             loss = criterion(output, labels)
+            train_loss += loss.item()
             
             loss.backward()
             optimizer.step()
         
-    return model
+        train_losses.append(train_loss / len(train_loader.dataset))
+
+        model.eval()
+        test_loss = 0.0
+
+        # Kind of inefficient considering the test function below, maybe combine
+        # the functions by adding a check of whether we are at the final epoch
+        for images, labels in test_loader:
+
+            images = images.to(device)
+            labels = labels.to(device)
+            output = model(images)
+            
+            loss = criterion(output, labels)
+            test_loss += loss.item()
+
+        test_losses.append(test_loss / len(train_loader.dataset))
+        
+    return model, train_losses, test_losses
 
 # FIXME probably I haven't touched this since the Cambrian times (last week)
 # perhaps in conjunction with kfold 🤔
@@ -191,14 +218,32 @@ def main(local=False, file_name="submission.csv", num_patient=100):
     
     # idk how to feel about this model equaling thing i should probably change it
         # but i thinkt it's fine for now
-    model = train(model, criterion, optimizer, train_loader, device)
-    
+    model, train_losses, test_losses = train(model, criterion, optimizer, 
+                                             train_loader, test_loader, device)
    
     # if remote, test the model
     if not local:
         model = test(model, criterion, test_loader, device, name_of_output=file_name)
     
     torch.save(model.state_dict(), CKPT_PATH)
+
+    # Use stylesheet (Dracula)
+    plt.style.use(pltx.styles.dracula)
+
+    # Plot training loss
+    plt.plot(train_losses, label='Training Loss', color='turquoise')
+
+    # Plot validation loss
+    plt.plot(test_losses, label='Validation Loss', color='orange')
+
+    # Stylize plot
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.ylim(0.0, 1.0)
+    plt.legend()
+    plt.savefig('losses.pdf')
+    plt.show()
     
         
     
