@@ -51,7 +51,7 @@ class CustomDataset(Dataset):
     def sobel_filter(self, image):
 
         image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
-        
+
         sobel_x = cv2.Sobel(image, cv2.CV_64F, 1, 0, ksize=3)
         sobel_y = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=3)
         sobel_combined = cv2.addWeighted(sobel_x, 0.5, sobel_y, 0.5, 0)
@@ -59,7 +59,19 @@ class CustomDataset(Dataset):
         alpha = 1.5  # Contrast control (1.0-3.0)
         beta = -50  # Brightness control (-100-100)
 
-        return cv2.convertScaleAbs(sobel_combined, alpha=alpha, beta=beta)
+        sobel_adjusted = cv2.convertScaleAbs(sobel_combined, alpha=alpha, beta=beta)
+
+        # remove the background using segmentation
+        _, thresholded = cv2.threshold(sobel_adjusted, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        mask = np.zeros_like(image)
+        for contour in contours:
+            cv2.drawContours(mask, [contour], -1, 255, -1)
+
+
+        sobel_adjusted = cv2.bitwise_and(sobel_adjusted, mask)
+
+        return sobel_adjusted
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
