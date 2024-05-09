@@ -49,19 +49,17 @@ class CustomDataset(Dataset):
     
 
     def sobel_filter(self, image):
-        gray_image = image.convert('L')
+
+        image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
         
-        # Apply the Sobel filter
-        sobel_x = cv2.Sobel(np.array(gray_image), cv2.CV_64F, 1, 0, ksize=3)
-        sobel_y = cv2.Sobel(np.array(gray_image), cv2.CV_64F, 0, 1, ksize=3)
-        
-        # Calculate the gradient magnitude
-        gradient_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
-        
-        # Normalize the gradient magnitude to the range [0, 1]
-        gradient_magnitude = gradient_magnitude / np.max(gradient_magnitude)
-        
-        return gradient_magnitude
+        sobel_x = cv2.Sobel(image, cv2.CV_64F, 1, 0, ksize=3)
+        sobel_y = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=3)
+        sobel_combined = cv2.addWeighted(sobel_x, 0.5, sobel_y, 0.5, 0)
+
+        alpha = 1.5  # Contrast control (1.0-3.0)
+        beta = -50  # Brightness control (-100-100)
+
+        return cv2.convertScaleAbs(sobel_combined, alpha=alpha, beta=beta)
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
