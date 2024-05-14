@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 # from skimage import io
 import cv2
+from sklearn.utils import shuffle
+from torchvision import transforms
 
 CLASS_LABELS = ['No Finding', 'Enlarged Cardiomediastinum', 
             'Cardiomegaly', 'Lung Opacity', 'Pneumonia', 
@@ -13,7 +15,6 @@ CLASS_LABELS = ['No Finding', 'Enlarged Cardiomediastinum',
             'Support Devices']
 
 class CustomDataset(Dataset):
-    
 
     """My custom chexpert dataset"""
     
@@ -35,7 +36,10 @@ class CustomDataset(Dataset):
 	    # FIXME future generate NaN values for empty labels
         self.train = train
         if train:
-            self.df[self.labels] = self.df[self.labels].fillna(0)
+            # fill in with the mean of each column
+            self.df[self.labels] = self.df[self.labels].fillna(self.df[self.labels].mean())
+
+        self.df = shuffle(self.df)
         
         self.root_dir = root_dir
         self.transform = transform
@@ -45,19 +49,29 @@ class CustomDataset(Dataset):
     
 
     def sobel_filter(self, image):
-        gray_image = image.convert('L')
-        
-        # Apply the Sobel filter
-        sobel_x = cv2.Sobel(np.array(gray_image), cv2.CV_64F, 1, 0, ksize=3)
-        sobel_y = cv2.Sobel(np.array(gray_image), cv2.CV_64F, 0, 1, ksize=3)
-        
-        # Calculate the gradient magnitude
-        gradient_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
-        
-        # Normalize the gradient magnitude to the range [0, 1]
-        gradient_magnitude = gradient_magnitude / np.max(gradient_magnitude)
-        
-        return gradient_magnitude
+
+        image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
+
+        sobel_x = cv2.Sobel(image, cv2.CV_64F, 1, 0, ksize=3)
+        sobel_y = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=3)
+        sobel_combined = cv2.addWeighted(sobel_x, 0.5, sobel_y, 0.5, 0)
+
+        alpha = 1.5  # Contrast control (1.0-3.0)
+        beta = -50  # Brightness control (-100-100)
+
+        sobel_adjusted = cv2.convertScaleAbs(sobel_combined, alpha=alpha, beta=beta)
+
+        # remove the background using segmentation
+        _, thresholded = cv2.threshold(sobel_adjusted, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        mask = np.zeros_like(image)
+        for contour in contours:
+            cv2.drawContours(mask, [contour], -1, 255, -1)
+
+
+        sobel_adjusted = cv2.bitwise_and(sobel_adjusted, mask)
+
+        return sobel_adjusted
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
@@ -67,18 +81,30 @@ class CustomDataset(Dataset):
 
         path = row['Path']
         
+        
         try:
-            # TODO change this to torchvision.transforms stuff
-            # hopefully we wont even need a single opencv call
-
-            image = cv2.imread(os.path.join(self.root_dir, path))
-            resized_img = cv2.resize(image, (224, 224))
+            # only want to apply the random rotation to the training data
+            if self.train:
+                data_transform = transforms.Compose([
+                    transforms.Resize((224, 224)),
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                    transforms.RandomRotation(degrees=30),
+                ])
+            else:
+                data_transform = transforms.Compose([
+                    transforms.Resize((224, 224)),
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ])
             
-            resized_img = cv2.normalize(resized_img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+            # Load and transform the image
+            image = Image.open(os.path.join(self.root_dir, path))
+            resized_img = data_transform(image)
             
             # we want (C, H, W) not (H, W, C)
             resized_img = resized_img.transpose(2, 0, 1)
-            
+
+            resized_img = self.sobel_filter(resized_img)
+
             image = torch.tensor(resized_img, dtype=torch.float32)
             
             # basically going to want to change this whole try to an
