@@ -126,7 +126,7 @@ def test(model, criterion, test_loader, device, name_of_output):
     
 
 
-def main(local=False, file_name="submission.csv", num_patient=100):
+def main(local=False, file_name="submission.csv", num_patient=100, num_gpus=1):
     custom_dataset = CustomDataset(csv_file = TRAIN_CSV, root_dir = ROOT_DIR, train=True)
        
     # num_workers needs to be figured out
@@ -209,6 +209,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--file_name", type=str)
+    parser.add_argument("--num_gpus", type=int)
     
     args = parser.parse_args()
-    main(file_name=args.file_name)
+    main(file_name=args.file_name, num_gpus=args.num_gpus)
