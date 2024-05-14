@@ -43,6 +43,22 @@ class CustomDataset(Dataset):
     def __len__(self):
         return len(self.df)
     
+
+    def sobel_filter(self, image):
+        gray_image = image.convert('L')
+        
+        # Apply the Sobel filter
+        sobel_x = cv2.Sobel(np.array(gray_image), cv2.CV_64F, 1, 0, ksize=3)
+        sobel_y = cv2.Sobel(np.array(gray_image), cv2.CV_64F, 0, 1, ksize=3)
+        
+        # Calculate the gradient magnitude
+        gradient_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
+        
+        # Normalize the gradient magnitude to the range [0, 1]
+        gradient_magnitude = gradient_magnitude / np.max(gradient_magnitude)
+        
+        return gradient_magnitude
+
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
