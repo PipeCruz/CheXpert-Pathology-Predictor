@@ -21,7 +21,7 @@ ROOT_DIR = '/groups/CS156b/data'
 TRAIN_CSV = '/home/ttran5/imputed_train2023.csv'
 TEST_CSV = 'student_labels/solution_ids.csv'
 BATCH_SIZE = 64
-N_EPOCHS = 25
+N_EPOCHS = 1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CHUNK_SIZE = 1024
 
@@ -72,14 +72,30 @@ def main(file_name="submission.csv", num_gpus=1):
 
     trainer.fit(model, train_loader)
 
-    if not os.path.exists(ROOT_DIR + TEST_CSV):
+    test_csv_path = os.path.join(ROOT_DIR, TEST_CSV)
+    if not os.path.exists(test_csv_path):
         print("Test CSV file not found.")
         return
 
-    test_set = CustomDataset(csv_file=TEST_CSV, root_dir=ROOT_DIR, train=False)
+    test_set = CustomDataset(csv_file=test_csv_path, root_dir=ROOT_DIR, train=False)
     test_loader = DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 
-    trainer.test(model, test_dataloaders=test_loader)
+    # Generate predictions
+    model.eval()
+    predictions = []
+    ids = []
+    with torch.no_grad():
+        for batch in test_loader:
+            x, _, id_batch = batch
+            y_hat = model(x)
+            predictions.extend(y_hat.cpu().numpy())
+            ids.extend(id_batch)
+
+    # Write results to submission.csv
+    submission_df = pd.DataFrame(predictions, columns=OUTPUT_CLASSES[1:])
+    submission_df.insert(0, OUTPUT_CLASSES[0], ids)
+    submission_df.to_csv(file_name, index=False)
+    print(f"Results saved to {file_name}")
 
 
 import argparse

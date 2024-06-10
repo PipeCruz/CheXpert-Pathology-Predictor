@@ -10,11 +10,11 @@ import pytorch_lightning as pl
 import pandas as pd
 import numpy as np
 
-CKPT_PATH = '/home/ezhang3/156b/lightning_logs/version_2/checkpoints/epoch=73-step=51504.ckpt'
+CKPT_PATH = '/home/ezhang3/156b/checkpoints/best-checkpoint-v4.ckpt'
 N_CLASSES = 9
 ROOT_DIR = '/groups/CS156b/data'
-TRAIN_CSV = 'student_labels/train2023.csv'
-TEST_CSV = 'student_labels/test_ids.csv'
+TRAIN_CSV = '/home/ttran5/imputed_train2023.csv'
+TEST_CSV = 'student_labels/solution_ids.csv'
 BATCH_SIZE = 64
 N_EPOCHS = 25
 

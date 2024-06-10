@@ -26,4 +26,4 @@ def convert_csv(input_file, output_file):
             writer.writerow(new_row)
 
 # Replace 'input.csv' and 'output_new.csv' with your file paths
-convert_csv('submission_4gpu_ckpt73.csv', 'guh.csv')
+convert_csv('solution_submission_alexnet.csv', 'solution_submission_alex.csv')

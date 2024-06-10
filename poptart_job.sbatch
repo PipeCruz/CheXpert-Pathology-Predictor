@@ -15,19 +15,19 @@
 #SBATCH -A CS156b
 
 # Estimated time this job will take.
-#SBATCH -t 24:00:00
+#SBATCH -t 2:00:00
 
 # Total number of concurrent srun tasks. Most people will not need this.
 #SBATCH --ntasks=1
 
 # Number of CPU threads for each task as defined above.
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=12
 
 # Total amount of system RAM for all tasks. Be decently generous with this.
-#SBATCH --mem-per-cpu=16G
+#SBATCH --mem-per-cpu=8G
 
 # Request a single Tesla P100 GPU.
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:1
 
 # Send status update to email
 #SBATCH --mail-user=ezhang3@caltech.edu
@@ -39,4 +39,4 @@
 
 ### FIXME the file name should be changed each time
 cd /home/ezhang3/156b/
-/home/fcruzfal/anaconda3/bin/python3 modeldense_parallel_ckpt73.py --file_name submission_4gpu_ckpt73.csv --num_gpus 1
+/home/fcruzfal/anaconda3/bin/python3 modelalexnet_ckpt.py --file_name solution_submission_alexnet.csv --num_gpus 1
